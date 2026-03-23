@@ -6,6 +6,7 @@ const PostLike = require('../models/PostLike');
 const Favorite = require('../models/Favorite');
 const Comment = require('../models/Comment');
 const { Poll, PollOption, PollVote } = require('../models/Poll');
+const Topic = require('../models/Topic');
 const { generateAnonymousName } = require('../utils/anonymousName');
 
 const buildPollDataByPostId = async (posts, userId) => {
@@ -86,11 +87,11 @@ const buildPollDataByPostId = async (posts, userId) => {
 // 获取帖子列表
 exports.getPosts = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      pageSize = 20, 
-      category = 'all', 
-      sortBy = 'latest' 
+    const {
+      page = 1,
+      pageSize = 20,
+      category = 'all',
+      sortBy = 'latest'
     } = req.query;
 
     const isHotCategory = category === 'hot';
@@ -108,9 +109,9 @@ exports.getPosts = async (req, res) => {
 
     // 构建查询条件
     const query = { status: 'normal' };
-    
+
     if (category !== 'all' && category !== 'hot') {
-      query.tag = category;
+      query.topic = category; // 使用 topic.id 进行过滤
     }
     if (isHotCategory) {
       // 热榜只取最近5天发布的帖子（与 hotScore 计算窗口一致）
@@ -144,18 +145,30 @@ exports.getPosts = async (req, res) => {
 
     const total = await Post.countDocuments(query);
 
+    // 获取所有话题信息，构建 topic id -> topic 对象的映射
+    const topicIds = [...new Set(posts.map(p => p.topic))];
+    const topics = await Topic.find({ id: { $in: topicIds } }).lean();
+    const topicMap = new Map();
+    topics.forEach(topic => {
+      topicMap.set(topic.id, {
+        id: topic.id,
+        label: topic.label,
+        icon: topic.icon
+      });
+    });
+
     // 获取当前用户的点赞和收藏状态
     let userLikes = [];
     let userFavorites = [];
     if (req.user) {
       const postIds = posts.map(p => p._id);
-      userLikes = await PostLike.find({ 
-        userId: req.user.userId, 
-        postId: { $in: postIds } 
+      userLikes = await PostLike.find({
+        userId: req.user.userId,
+        postId: { $in: postIds }
       });
-      userFavorites = await Favorite.find({ 
-        userId: req.user.userId, 
-        postId: { $in: postIds } 
+      userFavorites = await Favorite.find({
+        userId: req.user.userId,
+        postId: { $in: postIds }
       });
     }
 
@@ -184,7 +197,7 @@ exports.getPosts = async (req, res) => {
         id: postId,
         postNum: post.postNum,
         content: post.content,
-        topic: post.topic,
+        topic: topicMap.get(post.topic) || { id: post.topic, label: post.topic, icon: '' },
         image: post.images.length > 0 ? post.images[0] : null,
         images: post.images,
         createdAt: post.createdAt.toISOString(),
@@ -231,9 +244,9 @@ exports.getPostById = async (req, res) => {
     const { postId } = req.params;
 
     // 构建查询条件
-    const query = { 
-      _id: postId, 
-      status: 'normal' 
+    const query = {
+      _id: postId,
+      status: 'normal'
     };
 
     // 增加institution过滤：仅当user.institution和post的发布者institution相同或post.syncToUni = True时，返回结果
@@ -259,19 +272,31 @@ exports.getPostById = async (req, res) => {
     post.viewCount += 1;
     await post.save();
 
+    // 获取话题完整信息
+    const topicInfo = await Topic.findOne({ id: post.topic }).lean();
+    const topicData = topicInfo ? {
+      id: topicInfo.id,
+      label: topicInfo.label,
+      icon: topicInfo.icon
+    } : {
+      id: post.topic,
+      label: post.topic,
+      icon: ''
+    };
+
     // 获取用户的点赞和收藏状态
     let isLiked = false;
     let isFavorited = false;
     let isAuthor = false;
-    
+
     if (req.user) {
-      const like = await PostLike.findOne({ 
-        userId: req.user.userId, 
-        postId: post._id 
+      const like = await PostLike.findOne({
+        userId: req.user.userId,
+        postId: post._id
       });
-      const favorite = await Favorite.findOne({ 
-        userId: req.user.userId, 
-        postId: post._id 
+      const favorite = await Favorite.findOne({
+        userId: req.user.userId,
+        postId: post._id
       });
       isLiked = !!like;
       isFavorited = !!favorite;
@@ -303,7 +328,7 @@ exports.getPostById = async (req, res) => {
         id: post._id.toString(),
         postNum: post.postNum,
         content: post.content,
-        topic: post.topic,
+        topic: topicData,
         images: post.images,
         createdAt: post.createdAt.toISOString(),
         likes: post.likeCount,
@@ -346,6 +371,18 @@ exports.createPost = async (req, res) => {
     }
 
     const { content, topic, isAnonymous, syncToUni, poll, images } = req.body;
+
+    // 验证话题是否存在且启用（使用 topic.id 进行验证）
+    const validTopic = await Topic.findOne({ id: topic, isActive: true });
+    if (!validTopic) {
+      return res.status(400).json({
+        code: 400,
+        message: '所选话题不存在或已禁用',
+        data: null,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     let pollData = poll;
     if (typeof poll === 'string' && poll.trim()) {
       try {
@@ -411,7 +448,7 @@ exports.createPost = async (req, res) => {
     const post = new Post({
       userId: req.user.userId,
       content,
-      topic, // post model中这个字段是 enum 类型，添加时需要在model和topicController中同时修改
+      topic, // 存储话题的 id（如 'technology', 'life' 等）
       images: finalImages,
       isAnonymous: normalizedIsAnonymous,
       syncToUni: normalizedSyncToUni,
@@ -602,6 +639,18 @@ exports.searchPosts = async (req, res) => {
       const likedPostIds = new Set(userLikes.map(l => l.postId.toString()));
       const favoritedPostIds = new Set(userFavorites.map(f => f.postId.toString()));
 
+      // 获取话题信息
+      const topicIds = [...new Set(posts.map(p => p.topic))];
+      const topics = await Topic.find({ id: { $in: topicIds } }).lean();
+      const topicMap = new Map();
+      topics.forEach(topic => {
+        topicMap.set(topic.id, {
+          id: topic.id,
+          label: topic.label,
+          icon: topic.icon
+        });
+      });
+
       const list = posts.map(post => {
         const pid = post._id.toString();
         const author = post.isAnonymous ? {
@@ -618,7 +667,7 @@ exports.searchPosts = async (req, res) => {
           id: pid,
           postNum: post.postNum,
           content: post.content,
-          topic: post.topic,
+          topic: topicMap.get(post.topic) || { id: post.topic, label: post.topic, icon: '' },
           image: post.images.length > 0 ? post.images[0] : null,
           images: post.images,
           createdAt: post.createdAt.toISOString(),
@@ -788,6 +837,18 @@ exports.searchPosts = async (req, res) => {
     const likedPostIds = new Set(userLikes.map(l => l.postId.toString()));
     const favoritedPostIds = new Set(userFavorites.map(f => f.postId.toString()));
 
+    // 获取话题信息
+    const topicIds = [...new Set(finalPosts.map(p => p.topic))];
+    const topics = await Topic.find({ id: { $in: topicIds } }).lean();
+    const topicMap = new Map();
+    topics.forEach(topic => {
+      topicMap.set(topic.id, {
+        id: topic.id,
+        label: topic.label,
+        icon: topic.icon
+      });
+    });
+
     // 格式化返回数据
     const list = finalPosts.map(post => {
       const postId = post._id.toString();
@@ -805,7 +866,7 @@ exports.searchPosts = async (req, res) => {
         id: postId,
         postNum: post.postNum,
         content: post.content,
-        topic: post.topic,
+        topic: topicMap.get(post.topic) || { id: post.topic, label: post.topic, icon: '' },
         image: post.images.length > 0 ? post.images[0] : null,
         images: post.images,
         createdAt: post.createdAt.toISOString(),

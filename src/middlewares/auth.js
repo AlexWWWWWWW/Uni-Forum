@@ -80,12 +80,12 @@ const authMiddleware = async (req, res, next) => {
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, JWT_SECRET);
       const user = await User.findById(decoded.userId);
-      
+
       if (user && user.status === 'active') {
         req.user = {
           userId: user._id.toString(),
@@ -96,7 +96,7 @@ const optionalAuth = async (req, res, next) => {
         };
       }
     }
-    
+
     next();
   } catch (error) {
     // 可选认证失败不影响请求继续
@@ -104,5 +104,28 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { authMiddleware, optionalAuth };
+// 管理员权限验证中间件（需要先经过 authMiddleware）
+const adminMiddleware = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      code: 401,
+      message: '未登录',
+      data: null,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      code: 403,
+      message: '权限不足，需要管理员权限',
+      data: null,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  next();
+};
+
+module.exports = { authMiddleware, optionalAuth, adminMiddleware };
 

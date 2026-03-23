@@ -9,12 +9,12 @@
 |------|------|------|------|
 | page | Number | 否 | 页码，默认1 |
 | pageSize | Number | 否 | 每页数量，默认20，最大100 |
-| category | String | 否 | 分类：all/hot/随写/情感/学业/求职/交易/美食 |
+| category | String | 否 | 分类：all/hot/话题id（如technology, life等，通过话题接口获取） |
 | sortBy | String | 否 | 排序：latest(最新)。注：category=hot 时固定返回热榜前10 |
 
 **请求示例：**
 ```
-GET /api/posts?page=1&pageSize=20&category=学业&sortBy=latest
+GET /api/posts?page=1&pageSize=20&category=study&sortBy=latest
 ```
 
 **成功响应：**
@@ -28,7 +28,7 @@ GET /api/posts?page=1&pageSize=20&category=学业&sortBy=latest
         "id": "69737a1e2cb37668a019b18b",
         "postNum": 554431,
         "content": "帖子内容",
-        "tag": "学业",
+        "topic": "study",
         "image": "/static/test.png",
         "images": [],
         "createdAt": "2026-01-21T10:15:00Z",
@@ -126,7 +126,7 @@ GET /api/posts/69737a1e2cb37668a019b18b
     "id": "69737a1e2cb37668a019b18b",
     "postNum": 554431,
     "content": "帖子内容",
-    "topic": "随写",
+    "topic": "casual",
     "images": [
       "https://example.com/image1.jpg",
       "https://example.com/image2.jpg"
@@ -228,7 +228,7 @@ Authorization: Bearer {token}
 - `poll`: 可选投票信息（如需传 JSON 可用字符串）
 
 **字段说明：**
-- `topic`: 必填，可选值：随写/情感/学业/求职/交易/美食
+- `topic`: 必填，话题id（如technology, life, study等），通过 `GET /api/topics` 接口获取可用话题列表
 - `images`: 可选，图片文件数组（最多9张）；数据库中存储为图片URL数组
 - `isAnonymous`: 必填，是否匿名
 - `syncToUni`: 必填，是否同步到所有Uni（设为true时，所有institution的用户都能看到此帖子）
@@ -355,7 +355,7 @@ GET /api/posts/search?keyword=测试&startTime=2026-01-21T00:00:00Z&endTime=2026
         "id": "69737a1e2cb37668a019b18b",
         "postNum": 554431,
         "content": "帖子内容包含测试关键字",
-        "tag": "学业",
+        "topic": "study",
         "image": "/static/test.png",
         "images": [],
         "createdAt": "2026-01-21T10:15:00Z",

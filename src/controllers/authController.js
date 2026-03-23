@@ -189,28 +189,24 @@ exports.login = async (req, res) => {
     
     if (!user) {
       // 首次登录，自动创建用户
-      // 从邮箱域名提取institution（例如：alex03w@connect.hku.hk -> hku）
-      // 测试：如果域名是qq.com，测试时提取hku
-      const emailDomain = email.split('@')[1];
-      let institution = emailDomain;
-      
-      // 如果域名包含点，提取主域名部分
-      if (emailDomain.includes('.')) {
-        const parts = emailDomain.split('.');
-        // 对于类似 connect.hku.hk 的域名，提取 hku
-        // 对于类似 example.com 的域名，提取 example
-        institution = parts.length > 2 ? parts[parts.length - 2] : parts[0];
-       
-        // 测试：如果域名是qq.com，测试时提取hku
-        if (emailDomain === 'qq.com') {
-          institution = 'hku';
-        }
+      // 从 ALLOWED_DOMAINS 配置中获取 institution
+      const institution = getInstitutionByEmail(email);
+
+      // 安全检查：理论上不会到这里(因为前面已经验证过验证码)
+      // 但为了防御性编程，还是加上检查
+      if (!institution) {
+        return res.status(403).json({
+          code: 403,
+          message: '无法识别的邮箱域名',
+          data: null,
+          timestamp: new Date().toISOString()
+        });
       }
-      
+
       user = new User({
         email,
         nickname: email.split('@')[0], // 默认昵称为邮箱前缀
-        institution: institution // 从邮箱域名提取institution
+        institution: institution // 从 ALLOWED_DOMAINS 配置获取
       });
       await user.save();
     } else {

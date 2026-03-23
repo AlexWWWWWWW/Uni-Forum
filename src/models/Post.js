@@ -18,8 +18,9 @@ const postSchema = new mongoose.Schema({
   },
   topic: {
     type: String,
-    required: true,
-    enum: ['随写', '情感', '学业', '求职', '交易', '美食']
+    required: true
+    // 存储话题的 id（而非 label），例如：'technology', 'life', 'study'
+    // 话题现在由 Topic 模型动态管理，验证逻辑在 controller 层进行
   },
   images: [{
     type: String

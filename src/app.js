@@ -7,6 +7,7 @@ const path = require('path');
 const connectDB = require('./config/database');
 const { generalLimiter } = require('./middlewares/rateLimiter');
 const { startHotScoreJob } = require('./jobs/hotScoreJob');
+const { startPromotionJob } = require('./jobs/promotionJob');
 
 // 导入路由
 const authRoutes = require('./routes/authRoutes');
@@ -16,6 +17,7 @@ const interactionRoutes = require('./routes/interactionRoutes');
 const pollRoutes = require('./routes/pollRoutes');
 const topicRoutes = require('./routes/topicRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const promotionRoutes = require('./routes/promotionRoutes');
 
 const app = express();
 
@@ -23,6 +25,7 @@ const app = express();
 const start = async () => {
   await connectDB();
   startHotScoreJob();
+  startPromotionJob();
 };
 
 // 中间件配置
@@ -56,6 +59,7 @@ app.use('/api', interactionRoutes);
 app.use('/api', pollRoutes);
 app.use('/api', topicRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/promotions', promotionRoutes);
 
 // 根路径
 app.get('/', (req, res) => {

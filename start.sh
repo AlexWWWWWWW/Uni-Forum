@@ -48,8 +48,15 @@ if [ ! -d "uploads" ]; then
     echo ""
 fi
 
+# 初始化话题
+echo "🔄 正在初始化话题..."
+node scripts/initTopics.js
+echo "✅ 话题初始化完成"
+echo ""
+
 # 启动服务
 echo "🚀 正在启动服务..."
 echo ""
+# npm start
 npm run dev
 
